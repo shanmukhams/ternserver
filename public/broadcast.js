@@ -54,34 +54,8 @@ window.onunload = window.onbeforeunload = () => {
 
 // Get camera and microphone
 const videoElement = document.querySelector("video");
-const audioSelect = document.querySelector("select#audioSource");
-const videoSelect = document.querySelector("select#videoSource");
-
-audioSelect.onchange = getStream;
-videoSelect.onchange = getStream;
 
 getStream()
-  .then(getDevices)
-  .then(gotDevices);
-
-function getDevices() {
-  return navigator.mediaDevices.enumerateDevices();
-}
-
-function gotDevices(deviceInfos) {
-  window.deviceInfos = deviceInfos;
-  for (const deviceInfo of deviceInfos) {
-    const option = document.createElement("option");
-    option.value = deviceInfo.deviceId;
-    if (deviceInfo.kind === "audioinput") {
-      option.text = deviceInfo.label || `Microphone ${audioSelect.length + 1}`;
-      audioSelect.appendChild(option);
-    } else if (deviceInfo.kind === "videoinput") {
-      option.text = deviceInfo.label || `Camera ${videoSelect.length + 1}`;
-      videoSelect.appendChild(option);
-    }
-  }
-}
 
 function getStream() {
   if (window.stream) {
@@ -89,68 +63,33 @@ function getStream() {
       track.stop();
     });
   }
-  const audioSource = audioSelect.value;
-  const videoSource = videoSelect.value;
-  console.log(videoSource)
   const constraints = {
     audio: false,
     video: true
   };
-  console.log(navigator.mediaDevices)
-  // Older browsers might not implement mediaDevices at all, so we set an empty object first
-if (navigator.mediaDevices === undefined) {
-  navigator.mediaDevices = {};
-}
 
-// Some browsers partially implement mediaDevices. We can't just assign an object
-// with getUserMedia as it would overwrite existing properties.
-// Here, we will just add the getUserMedia property if it's missing.
-if (navigator.mediaDevices.getUserMedia === undefined) {
-  navigator.mediaDevices.getUserMedia = function(constraints) {
+  var raspividStream = require('raspivid-stream');
+ 
+  var videoStream = raspividStream();
+  
+  // To stream over websockets:
+  videoStream.on('data', (data) => {
+      ws.send(data, { binary: true }, (error) => { if (error) console.error(error); });
+  });
 
-    // First get ahold of the legacy getUserMedia, if present
-    var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+  a = navigator.mediaDevices
+  .getUserMedia(constraints)
+  .then(gotStream)
+  .catch(handleError)
 
-    // Some browsers just don't implement it - return a rejected promise with an error
-    // to keep a consistent interface
-    if (!getUserMedia) {
-      return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
-    }
-
-    // Otherwise, wrap the call to the old navigator.getUserMedia with a Promise
-    return new Promise(function(resolve, reject) {
-      getUserMedia.call(navigator, constraints, resolve, reject);
-    });
-  }
-}
-
-
-  return navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-  .then(function(stream) {
-    var video = document.querySelector('video');
-    // Older browsers may not have srcObject
-    if ("srcObject" in video) {
-      video.srcObject = stream;
-    } else {
-      // Avoid using this in new browsers, as it is going away.
-      video.src = window.URL.createObjectURL(stream);
-    }
-    video.onloadedmetadata = function(e) {
-      video.play();
-    };
-  })
-    .then(gotStream)
-    .catch(handleError);
+  console.log(typeof a)
+  console.log(a)
+  
+  return a;
 }
 
 function gotStream(stream) {
   window.stream = stream;
-  audioSelect.selectedIndex = [...audioSelect.options].findIndex(
-    option => option.text === stream.getAudioTracks()[0].label
-  );
-  videoSelect.selectedIndex = [...videoSelect.options].findIndex(
-    option => option.text === stream.getVideoTracks()[0].label
-  );
   videoElement.srcObject = stream;
   socket.emit("broadcaster");
 }
